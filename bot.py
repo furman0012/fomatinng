@@ -1,78 +1,91 @@
 import telebot
+import os
+import re
 
-# --- CONFIGURATION ---
-API_TOKEN = '8281592181:AAGoaEPUXCby4uUN7_z8jiixKFE50RfFYGc'
-CHAT_ID = '1857783746'
+# Environment variables se le
+API_TOKEN = os.environ.get('BOT_TOKEN')
+if not API_TOKEN:
+    API_TOKEN = '5793659179:AAHYCzXArtN-zGkdw2ZFsgzW1Ps-GL81qhY'  # Backup
+
 bot = telebot.TeleBot(API_TOKEN)
 
-def get_multiline_input(prompt):
-    print(f"\n[?] {prompt}")
-    print("(Ek baar me saare usernames paste karein, phir 'DONE' likh kar Enter maarein)")
-    lines = []
-    while True:
-        line = input()
-        if line.strip().upper() == 'DONE':
-            break
-        if line.strip():
-            lines.append(line.strip())
-    return lines
+# Store user data temporarily (simple dict)
+user_data = {}
 
-def format_usernames_with_numbers(usernames):
-    """Format usernames with numbers - each in monospace using <code> tag"""
-    result = []
-    for i, user in enumerate(usernames, 1):
-        # Proper alignment with spaces
-        if i < 10:
-            result.append(f" {i}  - <code>{user}</code>")
-        else:
-            result.append(f" {i} - <code>{user}</code>")
-    return "\n".join(result)
+@bot.message_handler(commands=['start'])
+def start(message):
+    chat_id = message.chat.id
+    bot.reply_to(message, 
+        "⚡ *BOT READY* ⚡\n\n"
+        "📤 *Send me in this format:*\n"
+        "```\nusername1\nusername2\nusername3\n\npass: yourpass\nmail: yourmail\n```\n\n"
+        "✅ I'll convert into clean database format",
+        parse_mode="Markdown")
 
-def start_script():
-    print("🚀 --- Account Data Formatter & Sender --- 🚀")
+@bot.message_handler(func=lambda m: True)
+def handle_message(message):
+    chat_id = message.chat.id
+    text = message.text.strip()
+    lines = text.split('\n')
     
-    # 1. Collect Usernames
-    usernames = get_multiline_input("PASTE ALL USERNAMES:")
+    usernames = []
+    password = None
+    mail = None
+    
+    for line in lines:
+        if line.lower().startswith('pass:'):
+            password = line.split(':', 1)[1].strip()
+        elif line.lower().startswith('mail:'):
+            mail_input = line.split(':', 1)[1].strip()
+            mail = f"/accept {mail_input}"
+        else:
+            if line.strip():
+                usernames.append(line.strip())
+    
+    # Validate
+    if not password or not mail:
+        bot.reply_to(message, 
+            "❌ *Invalid Format!*\n\n"
+            "Send like this:\n"
+            "```\nusername1\nusername2\npass: yourpass\nmail: yourmail\n```",
+            parse_mode="Markdown")
+        return
     
     if not usernames:
-        print("❌ No usernames entered. Script stopping.")
+        bot.reply_to(message, "❌ No usernames found!")
         return
-
-    # 2. Collect Password
-    print("\n[?] ENTER PASSWORD:")
-    password = input(">> ").strip()
-
-    # 3. Collect Mail
-    print("\n[?] ENTER MAIL:")
-    mail_input = input(">> ").strip()
-    # Fix mail format: /accept + user_mail
-    mail = f"/accept {mail_input}"
-
-    print("\n⏳ Sending to Telegram...")
-
-    # --- FORMAT USERNAMES WITH MONOSPACE (HTML) ---
-    username_list = format_usernames_with_numbers(usernames)
     
-    # --- MESSAGE WITH EXACT FORMAT (no extra gaps) ---
-    professional_msg = (
-        "📂 <b>𝙳𝙰𝚃𝙰𝙱𝙰𝚂𝙴 𝙸𝙽𝙵𝙾</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👥 <b>𝚄𝚂𝙴𝚁𝚂</b> ({len(usernames)})\n"
-        f"{username_list}\n\n"
-        f"🔑 <b>𝙿𝙰𝚂𝚂</b> : <code>{password}</code>\n"
-        f"📧 <b>𝙼𝙰𝙸𝙻</b> : <code>{mail}</code>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "✅ <b>𝙰𝚕𝚕 𝙰𝚌𝚝𝚒𝚟𝚎</b> | 𝙵𝙱 𝙵𝚒𝚡𝚎𝚍\n"
-        "⚡ <i>𝙰𝚞𝚝𝚘 𝙶𝚎𝚗𝚎𝚛𝚊𝚝𝚎𝚍</i>\n\n"
-        "📜 <b>𝙿𝚘𝚕𝚒𝚌𝚢</b> : <a href='https://t.me/c/1545549574/5927'>Read before use</a>"
-    )
+    # Format output with HTML
+    output = "📂 <b>𝙳𝙰𝚃𝙰𝙱𝙰𝚂𝙴 𝙸𝙽𝙵𝙾</b>\n"
+    output += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    output += f"👥 <b>𝚄𝚂𝙴𝚁𝚂</b> ({len(usernames)})\n"
+    
+    for i, user in enumerate(usernames, 1):
+        if i < 10:
+            output += f" {i}  - <code>{user}</code>\n"
+        else:
+            output += f" {i} - <code>{user}</code>\n"
+    
+    output += f"\n🔑 <b>𝙿𝙰𝚂𝚂</b> : <code>{password}</code>\n"
+    output += f"📧 <b>𝙼𝙰𝙸𝙻</b> : <code>{mail}</code>\n"
+    output += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    output += "✅ <b>𝙰𝚕𝚕 𝙰𝚌𝚝𝚒𝚟𝚎</b> | 𝙵𝙱 𝙵𝚒𝚡𝚎𝚍\n"
+    output += "⚡ <i>𝙰𝚞𝚝𝚘 𝙶𝚎𝚗𝚎𝚛𝚊𝚝𝚎𝚍</i>\n\n"
+    output += "📜 <b>𝙿𝚘𝚕𝚒𝚌𝚢</b> : <a href='https://t.me/c/1545549574/5927'>Read before use</a>"
+    
+    bot.reply_to(message, output, parse_mode='HTML')
 
-    try:
-        bot.send_message(CHAT_ID, professional_msg, parse_mode='HTML')
-        print("\n✅ Data sent to Telegram!")
-        print(f"📤 Message sent to CHAT_ID: {CHAT_ID}")
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
+@bot.message_handler(commands=['help'])
+def help_command(message):
+    bot.reply_to(message, 
+        "📖 *How to use:*\n\n"
+        "Send me a message with:\n"
+        "- Usernames (one per line)\n"
+        "- `pass: yourpassword`\n"
+        "- `mail: yourmail@example.com`\n\n"
+        "*Example:*\n"
+        "```\ngouttad16_sdert\nceoutyer18_derxd\npass: pary90\nmail: dwrnvsr@indogmail.com\n```",
+        parse_mode="Markdown")
 
-if __name__ == "__main__":
-    start_script()
+print("✅ Bot is running on Railway...")
+bot.infinity_polling()
